@@ -1,0 +1,15 @@
+# Databricks workspace artefacts. A workspace URL carries the host and org id, so
+# nothing the console generates gets committed without being read first.
+.databricks/
+*.dbc
+
+# Exported query results. These can be large and are reproducible from the notebooks.
+*.csv
+*.parquet
+
+# Local scratch
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
