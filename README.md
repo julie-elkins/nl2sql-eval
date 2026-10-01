@@ -30,15 +30,20 @@ schema — which, in real use, is most of the time.
 the tenth on every single run — a reproducible blind spot around missing *time* rather than
 missing columns. See [What it found](#what-it-found).
 
-![Bar chart titled "Score, with the floor it moved on its own". Percent correct per question
-type, averaged over three runs of an identical prompt: answerable 47.2% with a floor of 1,
-ambiguous 62.5% with a floor of 0, unanswerable 90.0% with a floor of 0. Every bar is
-labelled with its score and its floor. The chart's own note adds that populations are never
-pooled, because a model declining all 30 questions would score 60% on a blended
-figure.](docs/dashboard-score-with-floor.png)
+![Three-tile dashboard. Top tile, "Score, with the floor it moved on its own": percent correct
+per question type, averaged over three runs of an identical prompt, with each bar's floor
+welded into its axis label — "answerable · floor 1" at 47.2, "ambiguous · floor 0" at 62.5,
+"unanswerable · floor 0" at 90.0. Its note adds that populations are never pooled, because a
+model declining all 30 questions would score 60% on a blended figure. Middle tile, "Verdict
+breakdown (unanswerable)": 27 correct declines against 3 invented answers, out of 10
+questions over 3 runs. Bottom tile, "Invented answers": a single row, question U07, whose
+missing data is noted as fiscal years ending at 2025, and whose generated query reads SELECT
+SUM(authorized_amount) FROM programs WHERE fiscal_year = 2027.](docs/dashboard.png)
 
 *Every score is reported with the floor beside it — how many answers changed across three
-runs of an identical prompt. A difference smaller than the floor has not been measured.*
+runs of an identical prompt. A difference smaller than the floor has not been measured. The
+floor is part of each bar's category name rather than a chart label, because a label is a
+display setting and can be switched off by someone editing something else.*
 
 ## What this measures
 
