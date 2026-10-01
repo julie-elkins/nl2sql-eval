@@ -24,6 +24,18 @@
 -- MAGIC `score_with_floor` exists so the chart label carries both numbers. A bar labelled
 -- MAGIC `47.2%` invites a comparison the data cannot support; `47.2% · floor 1` does not.
 -- MAGIC
+-- MAGIC **`question_type` exists because `score_with_floor` was not enough.** Measured
+-- MAGIC 2026-10-01: the tile had been configured to label its bars from `score_with_floor`, and
+-- MAGIC an unrelated edit to the chart — renaming an axis — silently reverted the label field to
+-- MAGIC the raw `mean_pct`. The bars went back to reading `47.2`, the floor stopped being
+-- MAGIC displayed, and nothing anywhere reported a change.
+-- MAGIC
+-- MAGIC So the floor is now part of the **category name** rather than part of a chart setting.
+-- MAGIC Put `question_type` on the x-axis and the axis labels read `answerable · floor 1`: a
+-- MAGIC reader cannot see a bar without seeing its floor, because they are the same string, and
+-- MAGIC axis labels have no "off". **A caveat that lives in a display setting is a caveat that
+-- MAGIC can be reverted by someone adjusting something else.**
+-- MAGIC
 -- MAGIC ### Why `run_label LIKE 'floor-a-%'` is not optional
 -- MAGIC
 -- MAGIC `eval_results` holds more than one prompt: `floor-a-%` is the baseline arm, `floor-b-%`
@@ -56,6 +68,8 @@ WITH per_run AS (
   GROUP  BY run_id, population
 )
 SELECT population,
+       concat(population, ' · floor ',
+              max(correct) - min(correct))         AS question_type,
        max(asked)                                  AS questions,
        round(100.0 * avg(correct) / max(asked), 1) AS mean_pct,
        round(avg(correct), 2)                      AS mean_correct,
