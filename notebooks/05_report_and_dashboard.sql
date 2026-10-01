@@ -20,6 +20,30 @@
 -- MAGIC Three identical runs of the same prompt. `mean_correct` is the score; `floor_width` is
 -- MAGIC how much that score moved on its own. **A reader who quotes the mean without the floor
 -- MAGIC is quoting a number this project was built to stop.**
+-- MAGIC
+-- MAGIC `score_with_floor` exists so the chart label carries both numbers. A bar labelled
+-- MAGIC `47.2%` invites a comparison the data cannot support; `47.2% · floor 1` does not.
+-- MAGIC
+-- MAGIC ### Why `run_label LIKE 'floor-a-%'` is not optional
+-- MAGIC
+-- MAGIC `eval_results` holds more than one prompt: `floor-a-%` is the baseline arm, `floor-b-%`
+-- MAGIC is the variant from notebook `04`, and notebook `03` writes its own run as well.
+-- MAGIC `floor_width` is `max - min` across the rows this query sees, so **widening the filter
+-- MAGIC changes what the floor means rather than how much data it rests on.** Across one arm it
+-- MAGIC is run-to-run variation with nothing changed, which is the floor. Across both arms it is
+-- MAGIC variation caused by the prompt change — the quantity the floor is supposed to be
+-- MAGIC compared against. Pool them and the comparison is against itself.
+-- MAGIC
+-- MAGIC Nothing fails when that happens. The tile renders, the label still reads `floor N`, and
+-- MAGIC the number is just wrong in the direction that makes any later claim look better tested
+-- MAGIC than it is.
+-- MAGIC
+-- MAGIC **If this query is parameterised for a dashboard filter, the filter's empty state must
+-- MAGIC not mean "all runs".** A predicate of the form
+-- MAGIC `(:run_label IS NULL OR array_contains(:run_label, run_label))` admits every arm as soon
+-- MAGIC as nobody has chosen one, which is the state every new viewer starts in. Either default
+-- MAGIC the parameter to the three `floor-a` runs, or group by `prompt_sha` as well so that two
+-- MAGIC prompts can only ever appear as two rows and never as one average.
 
 -- COMMAND ----------
 
@@ -32,15 +56,20 @@ WITH per_run AS (
   GROUP  BY run_id, population
 )
 SELECT population,
-       max(asked)                                        AS questions,
-       round(avg(correct), 2)                            AS mean_correct,
-       min(correct)                                      AS worst_run,
-       max(correct)                                      AS best_run,
-       max(correct) - min(correct)                       AS floor_width,
-       round(100.0 * avg(correct) / max(asked), 1)       AS mean_pct
+       max(asked)                                  AS questions,
+       round(100.0 * avg(correct) / max(asked), 1) AS mean_pct,
+       round(avg(correct), 2)                      AS mean_correct,
+       min(correct)                                AS worst_run,
+       max(correct)                                AS best_run,
+       max(correct) - min(correct)                 AS floor_width,
+       concat(round(100.0 * avg(correct) / max(asked), 1),
+              '% · floor ',
+              max(correct) - min(correct))         AS score_with_floor
 FROM   per_run
 GROUP  BY population
-ORDER  BY population;
+ORDER  BY CASE population WHEN 'answerable'   THEN 1
+                          WHEN 'unanswerable' THEN 2
+                          WHEN 'ambiguous'    THEN 3 END;
 
 -- COMMAND ----------
 
@@ -258,3 +287,11 @@ ORDER  BY run_started DESC, question_id;
 -- MAGIC populations is the exact artefact this project argues against: notebook `02` shows a
 -- MAGIC model that declines every single question scores 18 of 30 — which would publish as
 -- MAGIC "60% accurate" while answering nothing at all.
+-- MAGIC
+-- MAGIC **If you add a run filter, give it a default.** Section 1 says why an empty filter is
+-- MAGIC not a neutral starting state: it admits both prompt arms and silently redefines
+-- MAGIC `floor_width` into something larger that still renders as `floor N`.
+-- MAGIC
+-- MAGIC **The bar order comes from the visualisation, not the query.** An AI/BI chart sorts its
+-- MAGIC categories by its own setting, so the `ORDER BY` above has no effect on the tile. Set it
+-- MAGIC on the chart if the order matters.
