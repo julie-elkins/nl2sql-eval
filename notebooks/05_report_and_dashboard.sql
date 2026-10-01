@@ -288,9 +288,20 @@ ORDER  BY run_started DESC, question_id;
 -- MAGIC model that declines every single question scores 18 of 30 — which would publish as
 -- MAGIC "60% accurate" while answering nothing at all.
 -- MAGIC
--- MAGIC **If you add a run filter, give it a default.** Section 1 says why an empty filter is
--- MAGIC not a neutral starting state: it admits both prompt arms and silently redefines
--- MAGIC `floor_width` into something larger that still renders as `floor N`.
+-- MAGIC **Do not parameterise the run restriction at all. Put it in the SQL, in every tile.**
+-- MAGIC Measured 2026-10-01, after exactly that mistake: one `run_label` filter widget had been
+-- MAGIC bound to all three datasets, and **deleting the widget did not remove the parameters.**
+-- MAGIC Each query kept its `(:run_label IS NULL OR array_contains(:run_label, run_label))`
+-- MAGIC predicate, which with nothing supplying a value is `NULL IS NULL` — true for every row.
+-- MAGIC Two of three tiles silently widened from 3 runs to all 7.
+-- MAGIC
+-- MAGIC Nothing errored, and **the column that looks like a sanity check cannot see it.**
+-- MAGIC `avg_per_run` in section 2 divides by `count(DISTINCT run_id)`, so it reads the same
+-- MAGIC whether one arm is shown or three. Only the raw `occurrences` total moves, 30 to 70.
+-- MAGIC
+-- MAGIC The failure is per-tile, which is how it gets published: one tile reporting one arm
+-- MAGIC beside another reporting all of them, with nothing on screen saying they differ — a
+-- MAGIC dashboard breaking its own no-pooling rule in front of the reader it was built to warn.
 -- MAGIC
 -- MAGIC **The bar order comes from the visualisation, not the query.** An AI/BI chart sorts its
 -- MAGIC categories by its own setting, so the `ORDER BY` above has no effect on the tile. Set it
