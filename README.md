@@ -81,6 +81,15 @@ prompt fingerprint, on every row of `eval_results` — section 7 of notebook `05
 **Floor** is how many answers changed across the three identical runs. A later comparison has
 to beat that number before it means anything.
 
+The answerable floor of 1 is a single question, `A01`, and the mechanism is worth seeing. All
+three runs produced structurally identical SQL — same three-table join, same `GROUP BY`, same
+aggregate. The run that failed had aliased `programs` as `B` and `awards` as `C`, then selected
+`SUM(B.award_amount)`, a column that lives on `awards`. The query did not run.
+
+**Nothing about the model's reading of the question moved between runs. Its bookkeeping moved.**
+That is the whole case for measuring a floor before reporting a delta: a prompt change that
+shifts the score by one answer has not been shown to change anything the model understands.
+
 ### The finding: one reproducible blind spot, not general fabrication
 
 Nine of the ten unanswerable questions were declined correctly, every run. The model is
@@ -106,27 +115,75 @@ reproducible, which makes it the kind of failure you could actually build a guar
 
 A benchmark containing only answerable questions cannot surface this at all.
 
+### The mirror image: `A07` refused a question it could have answered
+
+Over-claiming and over-refusing are opposite failures with opposite fixes, which is why the
+verdict vocabulary keeps `invented_answer` and `wrongly_declined` apart rather than pooling
+them into "wrong". **This run produced a reproducible instance of each.** `U07` invented an
+answer three times out of three. `A07` — *"how many awards have not been paid out in full?"* —
+declined three times out of three, and it is answerable: sum each award's disbursements and
+compare the total to the award amount.
+
+The likely cause is one of the two deliberate traps in the schema comments. `disbursements`
+carries a comment saying the payments are not required to sum to the award amount, written to
+stop a model assuming they do. **It appears to have persuaded the model the question could not
+be answered at all.** The recorded `model_reason` for each decline would settle that and has
+not been read.
+
+A caveat in a schema description changing behaviour in a direction nobody designed for is the
+kind of thing worth knowing before deployment, and it is only visible because refusals are
+graded per population. One pooled number cannot show a model over-claiming and over-refusing
+at the same time.
+
 ### On the ambiguous half
 
 Five of eight ambiguous questions drew a request for clarification instead of an answer. The
 three that did not are the more expensive failure mode: an answer that is not wrong, merely
 answering a different question than the one asked, with nothing in the output to say so.
 
-### The answerable figure is not yet trustworthy, and that is the next thing to fix
+### Why the answerable figure is 47.2%, cause by cause
 
-47.2% is roughly 5.7 of 12, on ordinary aggregation queries — group by agency, count by
-status, sum by fiscal year. A model failing half of those is possible but it is not the most
-likely explanation.
+47.2% is 17 correct out of 12 questions over 3 runs. The obvious guess is that the grader is
+too strict, and **that guess is wrong**: of the 19 failures, three questions never reached
+result comparison at all, so no amount of leniency could have changed them.
 
-The likelier one is a limitation this project already documents: grading compares against one
-expected result set, so a correct query returning a differently-shaped answer — an extra
-column, a different grain, a decimal that rounds differently — is scored `wrong_result`. Until
-the failures are separated into genuine errors and grading artefacts, **this number should be
-read as a lower bound on the model and an upper bound on the grader's leniency, and not
-quoted as accuracy.**
+| Cause | Occurrences | Questions | Grading artefact? |
+|---|---|---|---|
+| Query written in the wrong SQL dialect | 3 | `A09` | no |
+| Table alias bound to the wrong table | 1 | `A01` | no |
+| Refused a question that was answerable | 3 | `A07` | no |
+| Reply carried no `answerable` boolean | 3 | `A06` | no |
+| Listed the rows instead of counting them | 3 | `A12` | no |
+| Omitted a column the expected query returned | 6 | `A03`, `A11` | **yes** |
 
-The two non-answerable figures do not depend on result-shape comparison at all, so they are
-unaffected.
+**Thirteen of nineteen failures are the model. Six are the grader** — and both of those are
+the same defect, which is not in the grader:
+
+- `A03` — *"which five grantees have received the most money in total?"* The model returned the
+  five grantee names, correctly ranked. The expected query also returns the total, so the
+  tuples differ and it grades wrong.
+- `A11` — *"what is the single largest award, and which grantee and program is it under?"* The
+  model returned the amount, the grantee and the program. The expected query also returns
+  `award_id`, a surrogate key the question never asks for.
+
+So **the fault is in the question bank.** `results_match` is doing exactly what it was written
+to do; it was handed two gold queries that ask for more than the question does. That is a
+one-line fix per question and a 30-call re-run, and it has not been done — so this README
+reports the band rather than the flattering end of it.
+
+**Credit those two questions and the answerable figure is 63.9% rather than 47.2%.** Neither
+number is the accuracy. 47.2% is what was measured. 63.9% is what you get by hand-crediting
+two questions after watching them fail, which is the move a calibrated grader exists to
+prevent. The true figure is in that band, and the only honest way to close it is to fix the
+bank and re-run.
+
+`A09` is the most actionable of the genuine failures: the model wrote
+`strftime('%Y', disbursement_date)`, a SQLite function Databricks does not have, on all three
+runs. **The prompt never names the SQL dialect.** That is a one-line prompt change and the
+obvious next A/B arm — the floor is 1, so recovering those three answers would clear it.
+
+The two non-answerable figures compare nothing against a gold result set, so none of this
+touches them.
 
 ## Two things that make the result trustworthy
 
@@ -239,8 +296,9 @@ retries; every cell finishes or raises.
 - **One model, one schema, thirty questions.** Nothing generalises to a different model or a
   real agency's data model. Thirty questions cannot support a percentage quoted to a decimal
   place, so the report gives counts.
-- **The answerable score is a lower bound.** One expected result set per question means a
-  differently-shaped correct answer grades wrong.
+- **The answerable score is a lower bound, now with a measured ceiling.** Two of the twelve
+  gold queries return a column the question does not ask for, so 47.2% is the floor and 63.9%
+  the ceiling. Neither end has been confirmed by a re-run against a corrected bank.
 - **"Unanswerable" is a human judgement**, recorded in the bank's `note` column. No test
   establishes it, and notebook `02` says so.
 - **A decline was checked for existing, not for being right.** The grader requires a reason;
