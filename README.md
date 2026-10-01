@@ -30,9 +30,12 @@ schema — which, in real use, is most of the time.
 the tenth on every single run — a reproducible blind spot around missing *time* rather than
 missing columns. See [What it found](#what-it-found).
 
-![Bar chart of percent correct per question type across three identical runs: ambiguous 62.5%
-with a floor of 0, answerable 47.2% with a floor of 1, unanswerable 90.0% with a floor of 0.
-Each bar is labelled with its score and its floor.](docs/dashboard-score-with-floor.png)
+![Bar chart titled "Score, with the floor it moved on its own". Percent correct per question
+type, averaged over three runs of an identical prompt: answerable 47.2% with a floor of 1,
+ambiguous 62.5% with a floor of 0, unanswerable 90.0% with a floor of 0. Every bar is
+labelled with its score and its floor. The chart's own note adds that populations are never
+pooled, because a model declining all 30 questions would score 60% on a blended
+figure.](docs/dashboard-score-with-floor.png)
 
 *Every score is reported with the floor beside it — how many answers changed across three
 runs of an identical prompt. A difference smaller than the floor has not been measured.*
