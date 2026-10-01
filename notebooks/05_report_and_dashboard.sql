@@ -263,10 +263,24 @@ ORDER  BY run_started DESC, question_id;
 -- MAGIC - **One model, one schema, thirty questions.** Nothing here generalises to a different
 -- MAGIC   model, a bigger schema, or a real agency's data model. A 30-question bank cannot
 -- MAGIC   support a percentage quoted to a decimal place, which is why section 1 reports counts.
--- MAGIC - **The answerable score is a floor, not a measurement.** Grading compares one expected
--- MAGIC   result set per question, so a different correct query with a different shape — an
--- MAGIC   extra column, a different grain — grades wrong. Real answerable accuracy is at least
--- MAGIC   what section 1 says and probably higher.
+-- MAGIC - **The answerable score is a floor, and the ceiling has now been measured.** Grading
+-- MAGIC   compares one expected result set per question, so a correct query with a different
+-- MAGIC   shape grades wrong. Splitting the failures by cause found exactly two questions where
+-- MAGIC   that happened — `A03` and `A11` — and in both the fault is the **gold query**, which
+-- MAGIC   returns a column the question never asks for: a running total on `A03`, the surrogate
+-- MAGIC   key `award_id` on `A11`. Credit those and the answerable figure moves from 47.2% to
+-- MAGIC   63.9%. **Quote neither as accuracy.** 47.2% is what was measured; 63.9% is what you
+-- MAGIC   get by hand-crediting two questions after watching them fail, which is the move
+-- MAGIC   notebook `02` exists to prevent. The band closes by fixing the bank and re-running,
+-- MAGIC   which costs 30 calls and has not been done.
+-- MAGIC
+-- MAGIC   The remaining thirteen failures are the model, not the grader, and **ten of the
+-- MAGIC   nineteen never reached result comparison at all** — queries that would not run (`A01`
+-- MAGIC   and `A09`; `A09` wrote SQLite `strftime` against a Databricks warehouse on all three
+-- MAGIC   runs), a refusal of an answerable question (`A07`), and replies with no `answerable`
+-- MAGIC   boolean (`A06`). **A grader cannot be too strict about a query that errored.** Assuming
+-- MAGIC   a low score means a harsh grader is the comfortable reading, and here it was wrong for
+-- MAGIC   ten of nineteen failures.
 -- MAGIC - **"Unanswerable" is a human judgement, not a computed property.** It rests on reading
 -- MAGIC   the schema and the `note` column. Notebook `02` says so explicitly: no test
 -- MAGIC   establishes it.

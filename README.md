@@ -68,9 +68,19 @@ all. Notebook `02` asserts that number deliberately, as the argument.
 
 ## What it found
 
-Three runs of an identical prompt against the foundation-model endpoint this workspace
-serves. Notebook `03` discovers that endpoint at run time and records it, along with the
-prompt fingerprint, on every row of `eval_results` — section 7 of notebook `05` prints them.
+Three runs of an identical prompt against **`databricks-gemma-3-12b`**. Notebook `03` probes a
+candidate list at run time rather than hard-coding a name, and records the winner, the prompt
+fingerprint and the bank size on every row of `eval_results`; section 7 of notebook `05` prints
+them. All three runs share one `prompt_sha` and one `bank_size`, which is what makes them
+comparable — a floor measured across two different prompts is not a floor.
+
+**The model is small, and not by choice: it is what the workspace served.** Twelve billion
+parameters is well below frontier scale, and that cuts both ways. It makes the 90% refusal rate
+more useful rather than less — noticing that data is absent turns out not to require an
+expensive model, which is the first question an agency costing this out would ask. It also
+explains the shape of the answerable failures: a model this size emitting SQLite syntax for a
+Databricks warehouse is unsurprising, because it has seen far more SQLite. **Nothing here says
+a larger model would do better or worse. That was not tested.**
 
 | Population | n | Mean correct | Floor |
 |---|---|---|---|
@@ -252,7 +262,7 @@ leaves Unity Catalog.
 |---|---|
 | Data and results | Five Delta tables in `workspace.nl2sql_eval`, plus `eval_results` and `eval_comparisons` |
 | The schema the model is shown | Read from `information_schema.columns` at run time, so the prompt cannot drift away from the tables |
-| The system under test | `ai_query()` against a serving endpoint, with `modelParameters => named_struct('temperature', …)` to pin sampling |
+| The system under test | `ai_query()` against `databricks-gemma-3-12b`, with `modelParameters => named_struct('temperature', …)` to pin sampling |
 | The report | Notebook `05` is SQL only, so every cell runs on a SQL warehouse and any cell pins straight to a dashboard |
 | The tiles | An AI/BI dashboard, three tiles, each one a query from notebook `05` |
 
@@ -293,9 +303,10 @@ retries; every cell finishes or raises.
 
 ## What this does NOT establish
 
-- **One model, one schema, thirty questions.** Nothing generalises to a different model or a
-  real agency's data model. Thirty questions cannot support a percentage quoted to a decimal
-  place, so the report gives counts.
+- **One model — `databricks-gemma-3-12b` — one schema, thirty questions.** Nothing generalises
+  to a different model or a real agency's data model, and a 12B open model is not a stand-in
+  for a frontier one in either direction. Thirty questions cannot support a percentage quoted
+  to a decimal place, so the report gives counts.
 - **The answerable score is a lower bound, now with a measured ceiling.** Two of the twelve
   gold queries return a column the question does not ask for, so 47.2% is the floor and 63.9%
   the ceiling. Neither end has been confirmed by a re-run against a corrected bank.
