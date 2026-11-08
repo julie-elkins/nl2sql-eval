@@ -166,7 +166,36 @@ ORDER  BY times_it_just_picked DESC, r.question_id;
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC ## 4. Full verdict matrix
+-- MAGIC ## 4. Semantic-context slice
+-- MAGIC
+-- MAGIC The question bank's `semantic_dimension` is reviewer metadata, not a field shown to
+-- MAGIC the model. It lets this report distinguish failures around entity scope, metric
+-- MAGIC definition, time, relationships, source availability, status meaning, answer shape,
+-- MAGIC and SQL dialect. A semantic context is the set of definitions, relationships, scope
+-- MAGIC rules, and source limits an agent needs to interpret a request; this slice does not
+-- MAGIC establish a formal ontology or prove that a model used the right business meaning.
+-- MAGIC
+-- MAGIC Counts remain grouped by population and verdict. Do not pool these dimensions into one
+-- MAGIC score: they have different correct behaviors and different failure costs.
+
+-- COMMAND ----------
+
+SELECT q.semantic_dimension,
+       r.population,
+       r.verdict,
+       count(*)                                  AS occurrences,
+       count(DISTINCT r.question_id)             AS distinct_questions,
+       sum(CASE WHEN r.correct THEN 1 ELSE 0 END) AS correct_rows
+FROM   workspace.nl2sql_eval.eval_results r
+JOIN   workspace.nl2sql_eval.questions    q USING (question_id)
+WHERE  r.run_label LIKE 'floor-a-%'
+GROUP  BY q.semantic_dimension, r.population, r.verdict
+ORDER  BY q.semantic_dimension, r.population, occurrences DESC;
+
+-- COMMAND ----------
+
+-- MAGIC %md
+-- MAGIC ## 5. Full verdict matrix
 -- MAGIC
 -- MAGIC The whole result in one table, per population. Nothing is pooled into a single accuracy
 -- MAGIC figure anywhere in this notebook, because answering and declining are different
@@ -184,7 +213,7 @@ ORDER  BY population, n DESC;
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC ## 5. Stability — which questions did not get the same verdict every time
+-- MAGIC ## 6. Stability — which questions did not get the same verdict every time
 -- MAGIC
 -- MAGIC Identical inputs, three runs. Anything listed here is a question the system has no
 -- MAGIC settled behaviour on. Note this is always at least as large as `floor_width` in section
@@ -205,7 +234,7 @@ ORDER  BY distinct_verdicts DESC, population, question_id;
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC ## 6. The A/B conclusion, as it was recorded
+-- MAGIC ## 7. The A/B conclusion, as it was recorded
 -- MAGIC
 -- MAGIC Straight out of `eval_comparisons`, where notebook `04` wrote each delta next to the
 -- MAGIC floor it was judged against. `INSIDE THE FLOOR` means this experiment cannot tell the
@@ -220,7 +249,7 @@ ORDER  BY compared_at DESC, population;
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC ## 7. Provenance — what produced each number above
+-- MAGIC ## 8. Provenance — what produced each number above
 -- MAGIC
 -- MAGIC `prompt_sha` covers the prompt template **and** the generated schema description
 -- MAGIC together. Two runs with the same `prompt_sha` were asked the same thing; two runs with
@@ -238,7 +267,7 @@ ORDER  BY started DESC;
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC ## 8. Anything the harness itself got wrong
+-- MAGIC ## 9. Anything the harness itself got wrong
 -- MAGIC
 -- MAGIC `provider_error` means the model call failed. A gold query that failed is also recorded
 -- MAGIC here rather than as a model error, so a harness fault never shows up as the model
