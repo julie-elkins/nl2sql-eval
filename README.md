@@ -55,6 +55,30 @@ Thirty questions in three populations, **graded separately and never pooled**:
 | `unanswerable` | 10 | **decline**, and name what is missing |
 | `ambiguous` | 8 | **ask**, because the question has more than one honest reading |
 
+### Semantic context, without claiming an ontology
+
+The bank also labels each question with a `semantic_dimension`: the reviewer-visible
+reason the question depends on meaning rather than only on SQL syntax. A semantic
+context is the set of definitions, relationships, scope rules, and source limits an
+agent needs to interpret a request. It is not automatically an ontology, meaning a
+formal model with logical axioms and reasoning rules.
+
+The dimensions cover:
+
+- `entity_scope` — which entity or population a term refers to;
+- `metric_definition` — what quantity, aggregation, or denominator a term means;
+- `temporal_scope` — which date, period, or time interpretation applies;
+- `relationship_path` — which joins or entity relationships are valid;
+- `status_definition` — what a state such as active means;
+- `data_availability` — whether the source contains the required fact;
+- `answer_shape` — which fields the question actually asks for; and
+- `query_dialect` — whether the generated SQL matches the target warehouse.
+
+This is diagnostic metadata, not a new model input and not a production semantic
+correctness score. The report uses it to show whether a failure clusters around
+meaning, source availability, or an adjacent query contract while preserving the
+existing three population scores.
+
 The ambiguous population is the interesting one. An unanswerable question has a clean right
 behaviour. An ambiguous one — *"show me funding for the Northeast"*, against a schema where
 `agencies.region` is the **agency's** region and `grantees.state` is where the money went —

@@ -28,6 +28,14 @@
 # MAGIC them hides the trade: a model tuned to decline more scores better on one half and
 # MAGIC worse on the other, and a single blended accuracy figure moves hardly at all. Every
 # MAGIC report in notebook `05` is **per population**.
+# MAGIC
+# MAGIC ## Semantic dimensions
+# MAGIC
+# MAGIC Each question carries a reviewer-only `semantic_dimension`. It is not shown to the
+# MAGIC model. The label records whether the case turns on entity scope, metric definition,
+# MAGIC temporal scope, relationship path, status meaning, source availability, requested
+# MAGIC answer shape, or SQL dialect. The report can therefore show *why* a failure happened
+# MAGIC without changing the three populations or their scoring rules.
 
 # COMMAND ----------
 
@@ -224,6 +232,48 @@ AMBIGUOUS = [
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ## Reviewer taxonomy for semantic context
+# MAGIC
+# MAGIC A semantic context is the set of definitions, relationships, scope rules and source
+# MAGIC limits an agent needs to interpret a request. These labels are diagnostic metadata, not
+# MAGIC a new prompt field and not proof that the model has used the right business definition.
+
+SEMANTIC_DIMENSION = {
+    "A01": "relationship_path",
+    "A02": "status_definition",
+    "A03": "entity_scope",
+    "A04": "temporal_scope",
+    "A05": "entity_scope",
+    "A06": "metric_definition",
+    "A07": "metric_definition",
+    "A08": "entity_scope",
+    "A09": "query_dialect",
+    "A10": "relationship_path",
+    "A11": "answer_shape",
+    "A12": "relationship_path",
+    "U01": "data_availability",
+    "U02": "data_availability",
+    "U03": "relationship_path",
+    "U04": "data_availability",
+    "U05": "data_availability",
+    "U06": "temporal_scope",
+    "U07": "temporal_scope",
+    "U08": "metric_definition",
+    "U09": "relationship_path",
+    "U10": "data_availability",
+    "M01": "temporal_scope",
+    "M02": "metric_definition",
+    "M03": "metric_definition",
+    "M04": "metric_definition",
+    "M05": "metric_definition",
+    "M06": "entity_scope",
+    "M07": "status_definition",
+    "M08": "temporal_scope",
+}
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ## Write the bank to Delta
 # MAGIC
 # MAGIC The bank lives in the catalogue rather than in this notebook's variables, so notebooks
@@ -252,13 +302,16 @@ def tidy(sql: str | None) -> str | None:
 rows = []
 for qid, text, ordered, sql in ANSWERABLE:
     rows.append(Row(question_id=qid, population="answerable", question_text=text,
-                    gold_sql=tidy(sql), order_matters=ordered, note=None))
+                    gold_sql=tidy(sql), order_matters=ordered, note=None,
+                    semantic_dimension=SEMANTIC_DIMENSION[qid]))
 for qid, text, note in UNANSWERABLE:
     rows.append(Row(question_id=qid, population="unanswerable", question_text=text,
-                    gold_sql=None, order_matters=False, note=note))
+                    gold_sql=None, order_matters=False, note=note,
+                    semantic_dimension=SEMANTIC_DIMENSION[qid]))
 for qid, text, note in AMBIGUOUS:
     rows.append(Row(question_id=qid, population="ambiguous", question_text=text,
-                    gold_sql=None, order_matters=False, note=note))
+                    gold_sql=None, order_matters=False, note=note,
+                    semantic_dimension=SEMANTIC_DIMENSION[qid]))
 
 spark.sql("""
 CREATE OR REPLACE TABLE questions (
@@ -267,7 +320,8 @@ CREATE OR REPLACE TABLE questions (
   question_text STRING  COMMENT 'The question as a stakeholder would ask it. This is the ONLY field shown to the model.',
   gold_sql      STRING  COMMENT 'Expected query, answerable questions only. Graded on the rows it RETURNS, never on its text.',
   order_matters BOOLEAN COMMENT 'True where the ordering is part of the answer, such as a top-N. Rows are compared as an unordered multiset otherwise.',
-  note          STRING  COMMENT 'Reviewer note: what is missing, or what is ambiguous. NEVER shown to the model.'
+  note          STRING  COMMENT 'Reviewer note: what is missing, or what is ambiguous. NEVER shown to the model.',
+  semantic_dimension STRING COMMENT 'Reviewer-only diagnostic dimension for the meaning or adjacent query contract exercised by the question. NEVER shown to the model.'
 ) COMMENT 'The evaluation question bank. Three populations, graded separately and never pooled into one accuracy figure.'
 """)
 
@@ -317,6 +371,17 @@ for row in bank:
 ids = [r.question_id for r in bank]
 if len(ids) != len(set(ids)):
     failures.append("duplicate question_id in the bank")
+
+expected_ids = set(ids)
+dimension_ids = set(SEMANTIC_DIMENSION)
+if expected_ids != dimension_ids:
+    failures.append(
+        "semantic dimensions do not cover the bank exactly: "
+        f"missing={sorted(expected_ids - dimension_ids)}, "
+        f"extra={sorted(dimension_ids - expected_ids)}"
+    )
+if any(not r.semantic_dimension for r in bank):
+    failures.append("every question must have a semantic_dimension")
 
 counts = {p: sum(1 for r in bank if r.population == p)
           for p in ("answerable", "unanswerable", "ambiguous")}
